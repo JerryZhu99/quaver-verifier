@@ -5,12 +5,26 @@
   <meta charset="UTF-8">
   <title>Quaver Verifier</title>
   <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
+  <link rel="stylesheet" href="node_modules/bootstrap/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
-  <h1>Quaver Verifier</h1>
+  <div class="container-fluid">
+    <div class="p-3">
+      <h1 class="my-3">Quaver Verifier</h1>
 
-  <button onclick="loadMapsetFolder()">Select Mapset</button>
+      <button class="btn btn-primary my-3" onclick="loadMapsetFolder()">Select Mapset</button>
+      <button class="btn btn-secondary my-3" onclick="refreshMapsetFolder()">Select Mapset</button>
+
+      <div>Selected Folder: <span id="mapset-path"></span></div>
+
+      <h2>Errors</h2>
+      <div id="error-container"></div>
+    </div>
+  </div>
+
+
   <script src="scripts.js"></script>
 </body>
 

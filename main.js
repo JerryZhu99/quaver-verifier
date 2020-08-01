@@ -33,16 +33,22 @@ app.on('activate', () => {
   }
 })
 
-ipcMain.handle('verify-mapset', async (event) => {
-  const openResult = await dialog.showOpenDialog({ title: "Select Mapset", properties: ['openDirectory'] });
-  const [directory] = openResult.filePaths;
 
-  if (!directory) {
-    return;
-  }
+let directory = null;
+
+ipcMain.handle('select-mapset', async (event) => {
+  const openResult = await dialog.showOpenDialog({ title: "Select Mapset", properties: ['openDirectory'] });
+  [directory] = openResult.filePaths;
+
+  if (!directory) return;
 
   return verifyMaps(directory);
 })
+
+ipcMain.handle('verify-mapset', async (event) => {
+  if (!directory) return;
+  return verifyMaps(directory);
+});
 
 async function verifyMaps(directory) {
   const files = await fs.readdir(directory);
@@ -61,7 +67,7 @@ async function verifyMaps(directory) {
   let audioFiles = new Set();
   let backgroundFiles = new Set();
 
-  let songLength = 0;
+  let songLength = Infinity;
 
   let titles = new Set();
   let artists = new Set();
@@ -69,8 +75,7 @@ async function verifyMaps(directory) {
   let creators = new Set();
   let tags = new Set();
 
-  const mapsetErrors = await Promise.all(mapsData.map(async map => {
-    const mapErrors = [];
+  mapsData.map(async map => {
     audioFiles.add(map.AudioFile);
     backgroundFiles.add(map.BackgroundFile);
     titles.add(map.Title);
@@ -78,32 +83,40 @@ async function verifyMaps(directory) {
     sources.add(map.Source);
     creators.add(map.Creator);
     tags.add(map.Tags);
+  });
 
-    const audioMetadata = await mm.parseFile(path.join(directory, map.AudioFile), { duration: true, skipCovers: true });
+  for (let audioFile of audioFiles.values()) {
+    const audioMetadata = await mm.parseFile(path.join(directory, audioFile), { duration: true, skipCovers: true });
 
     const audioLength = audioMetadata.format.duration;
     const audioBitrate = audioMetadata.format.bitrate;
 
-    songLength = audioLength;
+    songLength = Math.min(songLength, audioLength);
 
-    const dimensions = await sizeOf(path.join(directory, map.BackgroundFile));
-
-    if (dimensions.width < 1280 || dimensions.height < 720) {
-      mapErrors.push({ error: `Background image resolution must be at least 1280x720.` });
-    }
-
-    const stats = await fs.stat(path.join(directory, map.BackgroundFile));
-    if (stats['size'] > 4000000) {
-      mapErrors.push({ error: `Background image size must be less than 4Mb.` });
-    }
-
-    if (!map.AudioFile.endsWith('mp3')) {
-      mapErrors.push({ error: `Audio file format must be mp3.` });
+    if (!audioFile.endsWith('mp3')) {
+      generalErrors.push({ error: `Audio file format must be mp3. (${audioFile})` });
     }
 
     if (audioBitrate > 192000) {
-      mapErrors.push({ error: `Audio bitrate is higher than 192kbps.` });
+      generalErrors.push({ error: `Audio bitrate is higher than 192kbps. (${audioFile})` });
     }
+  }
+
+  for (let backgroundFile of backgroundFiles.values()) {
+    const dimensions = await sizeOf(path.join(directory, backgroundFile));
+
+    if (dimensions.width < 1280 || dimensions.height < 720) {
+      generalErrors.push({ error: `Background image resolution must be at least 1280x720. (${backgroundFile})` });
+    }
+
+    const stats = await fs.stat(path.join(directory, backgroundFile));
+    if (stats['size'] > 4000000) {
+      generalErrors.push({ error: `Background image size must be less than 4Mb. (${backgroundFile})` });
+    }
+  }
+
+  const mapsetErrors = await Promise.all(mapsData.map(async map => {
+    const mapErrors = [];
 
     if (map.DifficultyName == '') {
       mapErrors.push({ error: `This difficulty is missing a difficulty name.` });
@@ -124,51 +137,56 @@ async function verifyMaps(directory) {
       }
 
       for (let j = 0; j < laneObjects.length - 1; j++) {
+        const time = laneObjects[j].StartTime
         if (laneObjects[j].StartTime == laneObjects[j + 1].StartTime) {
           mapErrors.push({
-            error: `These objects are overlapping.`,
-            time: laneObjects[j].startTime,
+            error: `Objects are overlapping at ${time}.`,
+            time: time,
             lane: i
           });
         } else if (laneObjects[j].EndTime && laneObjects[j].EndTime >= laneObjects[j + 1].StartTime) {
           mapErrors.push({
-            error: `These objects are overlapping.`,
-            time: laneObjects[j].startTime,
+            error: `Objects are overlapping at ${time}.`,
+            time: time,
             lane: i
           });
         } else if (laneObjects[j + 1].StartTime - (laneObjects[j].EndTime ?? laneObjects[j].StartTime) < 10) {
           mapErrors.push({
-            error: `These objects are less than 10ms apart.`,
-            time: laneObjects[j].startTime,
+            error: `Objects are less than 10ms apart at ${time}.`,
+            time: time,
             lane: i
           });
         }
       }
     }
 
-    let firstObject = Math.min(...map.HitObjects.map(e => e.StartTime));
-    let lastObject = Math.max(...map.HitObjects.map(e => e.EndTime ?? e.StartTime));
+
+
+    let sortedObjects = map.HitObjects.sort((a, b) => (a.StartTime - b.StartTime));
+    let firstObject = Math.min(...sortedObjects.map(e => e.StartTime));
+    let lastObject = Math.max(...sortedObjects.map(e => e.EndTime ?? e.StartTime));
     let breakTimes = [];
-    for (let i = 0; i < map.HitObjects.length - 1; i++) {
-      let startTime = (map.HitObjects[i].EndTime ?? map.HitObjects[i].StartTime);
-      let endTime = map.HitObjects[i + 1].StartTime;
+
+    for (let i = 0; i < sortedObjects.length - 1; i++) {
+      let startTime = (sortedObjects[i].EndTime ?? sortedObjects[i].StartTime);
+      let endTime = sortedObjects[i + 1].StartTime;
       let timeDiff = endTime - startTime;
       if (timeDiff > 3000) {
         breakTimes.push({ time: startTime, length: timeDiff });
       }
     }
 
-    if (breakTimes.some(e => e.length > 30000)) {
+    let longBreaks = breakTimes.filter(e => e.length > 30000)
+    longBreaks.forEach(breakTime => {
       mapErrors.push({
-        error: `You cannot have more than 30 seconds of consecutive break time.`,
-        time: breakTimes,
-        lane: i,
+        error: `You cannot have more than 30 seconds of consecutive break time (${Math.round(breakTime.length / 1000)}s).`,
+        time: breakTime.time,
       });
-    }
+    });
 
-    const breakTime = breakTimes.reduce((a, b) => (a + b), 0);
-    const playTime = lastObject - firstObject - breakTime;
-    if (playTime / audioLength < 0.75) {
+    const breakTime = breakTimes.map(e => e.length).reduce((a, b) => (a + b), 0);
+    const playTime = (lastObject - firstObject - breakTime) / 1000.0;
+    if (playTime / songLength < 0.75) {
       mapErrors.push({
         error: `More than 75% of the length of the song must have notes to play.`
       });
@@ -197,7 +215,7 @@ async function verifyMaps(directory) {
   if (key4count > 0 && key7count > 0) {
     if (mapsData.some(e => !(e.DifficultyName.startsWith('4K') ||
       e.DifficultyName.startsWith('7K')))) {
-      generalErrors.push({ error: `Each difficulty must be prefixed with either “4K” or “7K” for sets with multiple game modes.` });
+      generalErrors.push({ error: `Each difficulty must be prefixed with either "4K" or "7K" for sets with multiple game modes.` });
 
     }
   }
@@ -248,5 +266,5 @@ async function verifyMaps(directory) {
     generalErrors.push({ error: `Source is repeated in tags.` })
   }
 
-  return { generalErrors, mapsetErrors };
+  return { generalErrors, mapsetErrors, directory };
 }

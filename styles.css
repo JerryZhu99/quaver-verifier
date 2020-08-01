@@ -1,0 +1,15 @@
+body {
+  font-family: Lato, "Helvetica Neue", "Microsoft YaHei", Arial, Helvetica, sans-serif;
+  background-color: rgb(26, 26, 26);
+  color: rgb(255, 255, 255);
+}
+
+.card {
+  border: none;
+  background-color: #242424;
+}
+
+.card-body {
+  background-color: #242424;
+  color: #FFFFFF;
+}
