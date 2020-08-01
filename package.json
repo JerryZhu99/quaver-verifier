@@ -1,12 +1,12 @@
 {
   "name": "quaver-verifier",
   "version": "0.0.1",
-  "description": "",
+  "description": "Checks for issues in quaver maps.",
   "main": "main.js",
   "scripts": {
     "start": "electron ."
   },
-  "author": "",
+  "author": "Jerry Zhu",
   "license": "MIT",
   "devDependencies": {
     "electron": "^9.1.2"
