@@ -23,9 +23,10 @@ async function renderErrors(data) {
   sections = sections.concat(data.mapsetErrors);
 
   errorContainer.innerHTML = sections.map(({ name, errors }) => `
+  <div class='my-2'>
     <div class='card'>
       <div class="card-body">
-        <h5 class="card-title">${name}</h5>
+        <h5 class="card-title">${name || '(no name)'}</h5>
         <p class="card-text">
         ${errors.length > 0 ? `
         <ul>
@@ -44,8 +45,8 @@ async function renderErrors(data) {
         `}
         </p>
       </div>
-    <div>
-  
+    </div>
+  </div>
   `).join('\n');
 
   console.log(data)

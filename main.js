@@ -1,5 +1,5 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron')
-const fs = require('fs').promises;
+const { promises: fs, existsSync } = require('fs');
 const path = require('path');
 const jsyaml = require('js-yaml');
 const mm = require('music-metadata');
@@ -16,7 +16,7 @@ function createWindow() {
 
   win.loadFile('index.html')
 
-  win.webContents.openDevTools()
+  // win.webContents.openDevTools()
 }
 
 app.whenReady().then(createWindow)
@@ -86,6 +86,13 @@ async function verifyMaps(directory) {
   });
 
   for (let audioFile of audioFiles.values()) {
+    if (!audioFile) continue;
+
+    if (!existsSync(path.join(directory, audioFile))) {
+      generalErrors.push({ error: `Audio file is missing. (${audioFile})` });
+      continue;
+    }
+
     const audioMetadata = await mm.parseFile(path.join(directory, audioFile), { duration: true, skipCovers: true });
 
     const audioLength = audioMetadata.format.duration;
@@ -103,6 +110,13 @@ async function verifyMaps(directory) {
   }
 
   for (let backgroundFile of backgroundFiles.values()) {
+    if (!backgroundFile) continue;
+
+    if (!existsSync(path.join(directory, backgroundFile))) {
+      generalErrors.push({ error: `Background image is missing. (${backgroundFile})` });
+      continue;
+    }
+
     const dimensions = await sizeOf(path.join(directory, backgroundFile));
 
     if (dimensions.width < 1280 || dimensions.height < 720) {
@@ -216,7 +230,6 @@ async function verifyMaps(directory) {
     if (mapsData.some(e => !(e.DifficultyName.startsWith('4K') ||
       e.DifficultyName.startsWith('7K')))) {
       generalErrors.push({ error: `Each difficulty must be prefixed with either "4K" or "7K" for sets with multiple game modes.` });
-
     }
   }
 
