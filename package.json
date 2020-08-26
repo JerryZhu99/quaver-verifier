@@ -4,12 +4,14 @@
   "description": "Checks for issues in quaver maps.",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build": "electron-packager . quaver-verifier"
   },
   "author": "Jerry Zhu",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^9.1.2"
+    "electron": "^9.1.2",
+    "electron-packager": "^15.0.0"
   },
   "dependencies": {
     "bootstrap": "^4.5.0",
